@@ -2,6 +2,7 @@ import abi from '../ethereum/ethereum.abi.json';
 import { logger } from '../../services/logger';
 import { Contract, Transaction, Wallet } from 'ethers';
 import { EthereumBase } from '../ethereum/ethereum-base';
+import { UniswapConfig } from '../../connectors/uniswap/uniswap.config';
 import { getEthereumConfig as getBinanceSmartChainConfig } from '../ethereum/ethereum.config';
 import { Provider } from '@ethersproject/abstract-provider';
 import { Chain as Ethereumish } from '../../services/common-interfaces';
@@ -30,7 +31,7 @@ export class BinanceSmartChain extends EthereumBase implements Ethereumish {
       config.manualGasPrice,
       config.gasLimitTransaction,
       ConfigManagerV2.getInstance().get('server.nonceDbPath'),
-      ConfigManagerV2.getInstance().get('server.transactionDbPath')
+      ConfigManagerV2.getInstance().get('server.transactionDbPath'),
     );
     this._chain = config.network.name;
     this._nativeTokenSymbol = config.nativeCurrencySymbol;
@@ -73,7 +74,7 @@ export class BinanceSmartChain extends EthereumBase implements Ethereumish {
 
     setTimeout(
       this.updateGasPrice.bind(this),
-      this._gasPriceRefreshInterval * 1000
+      this._gasPriceRefreshInterval * 1000,
     );
   }
 
@@ -97,21 +98,27 @@ export class BinanceSmartChain extends EthereumBase implements Ethereumish {
 
   getSpender(reqSpender: string): string {
     let spender: string;
-    if (reqSpender === 'pancakeswap') {
+    if (reqSpender === 'uniswap') {
+      spender = UniswapConfig.config.uniswapV3SmartOrderRouterAddress(
+        this._chain,
+      );
+    } else if (reqSpender === 'uniswapLP') {
+      spender = UniswapConfig.config.uniswapV3NftManagerAddress(this._chain);
+    } else if (reqSpender === 'pancakeswap') {
       spender = PancakeSwapConfig.config.routerAddress(this._chain);
     } else if (reqSpender === 'pancakeswapLP') {
       spender = PancakeSwapConfig.config.pancakeswapV3NftManagerAddress(
-        this._chain
+        this._chain,
       );
     } else if (reqSpender === 'sushiswap') {
       spender = SushiswapConfig.config.sushiswapRouterAddress(
         'binance-smart-chain',
-        this._chain
+        this._chain,
       );
     } else if (reqSpender === 'openocean') {
       spender = OpenoceanConfig.config.routerAddress(
         'binance-smart-chain',
-        this._chain
+        this._chain,
       );
     } else {
       spender = reqSpender;
@@ -122,7 +129,7 @@ export class BinanceSmartChain extends EthereumBase implements Ethereumish {
   // cancel transaction
   async cancelTx(wallet: Wallet, nonce: number): Promise<Transaction> {
     logger.info(
-      'Canceling any existing transaction(s) with nonce number ' + nonce + '.'
+      'Canceling any existing transaction(s) with nonce number ' + nonce + '.',
     );
     return super.cancelTxWithGasPrice(wallet, nonce, this._gasPrice * 2);
   }

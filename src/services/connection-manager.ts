@@ -191,14 +191,18 @@ export async function getConnector<T>(
   let connectorInstance: ConnectorUnion;
 
   if (
-    (chain === 'ethereum' || chain === 'polygon') &&
+    (chain === 'ethereum' ||
+      chain === 'binance-smart-chain' ||
+      chain === 'polygon') &&
     connector === 'uniswap'
   ) {
     connectorInstance = Uniswap.getInstance(chain, network);
   } else if (chain === 'polygon' && connector === 'quickswap') {
     connectorInstance = Quickswap.getInstance(chain, network);
   } else if (
-    (chain === 'ethereum' || chain === 'polygon') &&
+    (chain === 'ethereum' ||
+      chain === 'binance-smart-chain' ||
+      chain === 'polygon') &&
     connector === 'uniswapLP'
   ) {
     connectorInstance = UniswapLP.getInstance(chain, network);

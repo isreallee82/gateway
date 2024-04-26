@@ -19,9 +19,10 @@ import {
 } from './uniswap.lp.interfaces';
 import * as math from 'mathjs';
 import { getAddress } from 'ethers/lib/utils';
+import { BinanceSmartChain } from '../../chains/binance-smart-chain/binance-smart-chain';
 
 export class UniswapLPHelper {
-  protected ethereum: Ethereum;
+  protected chain: Ethereum | BinanceSmartChain;
   protected chainId;
   private _router: string;
   private _nftManager: string;
@@ -36,12 +37,16 @@ export class UniswapLPHelper {
   public abiDecoder: any;
 
   constructor(chain: string, network: string) {
-    this.ethereum = Ethereum.getInstance(network);
+    if (chain === 'binance-smart-chain') {
+      this.chain = BinanceSmartChain.getInstance(network);
+    } else {
+      this.chain = Ethereum.getInstance(network);
+    }
     this._chain = chain;
-    this.chainId = this.ethereum.chainId;
+    this.chainId = this.chain.chainId;
     this._alphaRouter = new AlphaRouter({
       chainId: this.chainId,
-      provider: this.ethereum.provider,
+      provider: this.chain.provider,
     });
     this._router =
       UniswapConfig.config.uniswapV3SmartOrderRouterAddress(network);
@@ -101,18 +106,19 @@ export class UniswapLPHelper {
   }
 
   public async init() {
-    if (this._chain == 'ethereum' && !this.ethereum.ready())
+    const chainName = this.chain.toString();
+    if (this._chain == chainName && !this.chain.ready())
       throw new InitializationError(
-        SERVICE_UNITIALIZED_ERROR_MESSAGE('ETH'),
-        SERVICE_UNITIALIZED_ERROR_CODE
+        SERVICE_UNITIALIZED_ERROR_MESSAGE(chainName),
+        SERVICE_UNITIALIZED_ERROR_CODE,
       );
-    for (const token of this.ethereum.storedTokenList) {
+    for (const token of this.chain.storedTokenList) {
       this.tokenList[token.address] = new Token(
         this.chainId,
         token.address,
         token.decimals,
         token.symbol,
-        token.name
+        token.name,
       );
     }
     this._ready = true;
@@ -128,13 +134,13 @@ export class UniswapLPHelper {
     const nd = allowedSlippage.match(percentRegexp);
     if (nd) return new Percent(nd[1], nd[2]);
     throw new Error(
-      'Encountered a malformed percent string in the config for ALLOWED_SLIPPAGE.'
+      'Encountered a malformed percent string in the config for ALLOWED_SLIPPAGE.',
     );
   }
 
   getContract(
     contract: string,
-    signer: providers.StaticJsonRpcProvider | Signer
+    signer: providers.StaticJsonRpcProvider | Signer,
   ): Contract {
     if (contract === 'router') {
       return new Contract(this.router, this.routerAbi, signer);
@@ -145,26 +151,23 @@ export class UniswapLPHelper {
 
   getPoolContract(
     pool: string,
-    wallet: providers.StaticJsonRpcProvider | Signer
+    wallet: providers.StaticJsonRpcProvider | Signer,
   ): Contract {
     return new Contract(pool, this.poolAbi, wallet);
   }
 
   async getPoolState(
     poolAddress: string,
-    fee: uniV3.FeeAmount
+    fee: uniV3.FeeAmount,
   ): Promise<PoolState> {
-    const poolContract = this.getPoolContract(
-      poolAddress,
-      this.ethereum.provider
-    );
+    const poolContract = this.getPoolContract(poolAddress, this.chain.provider);
     const minTick = uniV3.nearestUsableTick(
       uniV3.TickMath.MIN_TICK,
-      uniV3.TICK_SPACINGS[fee]
+      uniV3.TICK_SPACINGS[fee],
     );
     const maxTick = uniV3.nearestUsableTick(
       uniV3.TickMath.MAX_TICK,
-      uniV3.TICK_SPACINGS[fee]
+      uniV3.TICK_SPACINGS[fee],
     );
     const poolDataReq = await Promise.allSettled([
       poolContract.liquidity(),
@@ -174,14 +177,14 @@ export class UniswapLPHelper {
     ]);
 
     const rejected = poolDataReq.filter(
-      (r) => r.status === 'rejected'
+      (r) => r.status === 'rejected',
     ) as PromiseRejectedResult[];
 
     if (rejected.length > 0) throw new Error('Unable to fetch pool state');
 
     const poolData = (
       poolDataReq.filter(
-        (r) => r.status === 'fulfilled'
+        (r) => r.status === 'fulfilled',
       ) as PromiseFulfilledResult<any>[]
     ).map((r) => r.value);
 
@@ -215,7 +218,7 @@ export class UniswapLPHelper {
     token1: Token,
     tier: string,
     period: number = 1,
-    interval: number = 1
+    interval: number = 1,
   ): Promise<string[]> {
     const fetchPriceTime = [];
     const prices = [];
@@ -223,7 +226,7 @@ export class UniswapLPHelper {
     const poolContract = new Contract(
       uniV3.Pool.getAddress(token0, token1, fee),
       this.poolAbi,
-      this.ethereum.provider
+      this.chain.provider,
     );
     for (
       let x = Math.ceil(period / interval) * interval;
@@ -242,11 +245,11 @@ export class UniswapLPHelper {
               token1,
               Math.ceil(
                 response.tickCumulatives[twap + 1].sub(
-                  response.tickCumulatives[twap].toNumber()
-                ) / interval
-              )
+                  response.tickCumulatives[twap].toNumber(),
+                ) / interval,
+              ),
             )
-            .toFixed(8)
+            .toFixed(8),
         );
       }
     } catch (e) {
@@ -260,12 +263,12 @@ export class UniswapLPHelper {
     const requests = [contract.positions(tokenId)];
     const positionInfoReq = await Promise.allSettled(requests);
     const rejected = positionInfoReq.filter(
-      (r) => r.status === 'rejected'
+      (r) => r.status === 'rejected',
     ) as PromiseRejectedResult[];
     if (rejected.length > 0) throw new Error('Unable to fetch position');
     const positionInfo = (
       positionInfoReq.filter(
-        (r) => r.status === 'fulfilled'
+        (r) => r.status === 'fulfilled',
       ) as PromiseFulfilledResult<any>[]
     ).map((r) => r.value);
     return positionInfo[0];
@@ -276,7 +279,7 @@ export class UniswapLPHelper {
     tokenId: number,
     token0: Token,
     token1: Token,
-    wallet: Wallet
+    wallet: Wallet,
   ): ReduceLiquidityData {
     return {
       tokenId: tokenId,
@@ -301,7 +304,7 @@ export class UniswapLPHelper {
     fee: uniV3.FeeAmount,
     lowerPrice: number,
     upperPrice: number,
-    tokenId: number = 0
+    tokenId: number = 0,
   ): Promise<AddPosReturn> {
     if (token1.sortsBefore(token0)) {
       [token0, token1] = [token1, token0];
@@ -312,7 +315,7 @@ export class UniswapLPHelper {
     const upperPriceInFraction = math.fraction(upperPrice) as math.Fraction;
     const poolData = await this.getPoolState(
       uniV3.Pool.getAddress(token0, token1, fee),
-      fee
+      fee,
     );
     const pool = new uniV3.Pool(
       token0,
@@ -320,7 +323,7 @@ export class UniswapLPHelper {
       poolData.fee,
       poolData.sqrtPriceX96.toString(),
       poolData.liquidity.toString(),
-      poolData.tick
+      poolData.tick,
     );
 
     const addLiquidityOptions =
@@ -342,10 +345,10 @@ export class UniswapLPHelper {
             .toString(),
           utils
             .parseUnits(lowerPriceInFraction.n.toString(), token1.decimals)
-            .toString()
-        )
+            .toString(),
+        ),
       ),
-      uniV3.TICK_SPACINGS[fee]
+      uniV3.TICK_SPACINGS[fee],
     );
 
     const tickUpper = uniV3.nearestUsableTick(
@@ -358,10 +361,10 @@ export class UniswapLPHelper {
             .toString(),
           utils
             .parseUnits(upperPriceInFraction.n.toString(), token1.decimals)
-            .toString()
-        )
+            .toString(),
+        ),
       ),
-      uniV3.TICK_SPACINGS[fee]
+      uniV3.TICK_SPACINGS[fee],
     );
 
     const position = uniV3.Position.fromAmounts({
@@ -378,7 +381,7 @@ export class UniswapLPHelper {
 
     const methodParameters = uniV3.NonfungiblePositionManager.addCallParameters(
       position,
-      { ...swapOptions, ...addLiquidityOptions }
+      { ...swapOptions, ...addLiquidityOptions },
     );
     return { ...methodParameters, swapRequired: false };
   }
@@ -386,7 +389,7 @@ export class UniswapLPHelper {
   async reducePositionHelper(
     wallet: Wallet,
     tokenId: number,
-    decreasePercent: number
+    decreasePercent: number,
   ): Promise<uniV3.MethodParameters> {
     // Reduce position and burn
     const positionData = await this.getRawPosition(wallet, tokenId);
@@ -395,7 +398,7 @@ export class UniswapLPHelper {
     const fee = positionData.fee;
     if (!token0 || !token1) {
       throw new Error(
-        `One of the tokens in this position isn't recognized. $token0: ${token0}, $token1: ${token1}`
+        `One of the tokens in this position isn't recognized. $token0: ${token0}, $token1: ${token1}`,
       );
     }
     const poolAddress = uniV3.Pool.getAddress(token0, token1, fee);
@@ -407,7 +410,7 @@ export class UniswapLPHelper {
         poolData.fee,
         poolData.sqrtPriceX96.toString(),
         poolData.liquidity.toString(),
-        poolData.tick
+        poolData.tick,
       ),
       tickLower: positionData.tickLower,
       tickUpper: positionData.tickUpper,
@@ -420,8 +423,8 @@ export class UniswapLPHelper {
         tokenId,
         token0,
         token1,
-        wallet
-      )
+        wallet,
+      ),
     );
   }
 }
