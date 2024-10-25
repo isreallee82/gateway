@@ -363,6 +363,10 @@ export class PancakeSwap implements Uniswapish {
       'https://api.studio.thegraph.com/query/45376/exchange-v3-arbitrum/version/latest';
     const v2Arburl: string =
       'https://api.studio.thegraph.com/query/45376/exchange-v2-arbitrum/version/latest';
+    const v3Base: string =
+      'https://api.studio.thegraph.com/query/45376/exchange-v3-arbitrum/version/latest';
+    const v2Base: string =
+      'https://api.studio.thegraph.com/query/45376/exchange-v2-arbitrum/version/latest';
 
     if (this._chain === 'ethereum' && this.chainId === 324) {
       v3SubgraphClient = new GraphQLClient(v3Zksurl);
@@ -370,6 +374,9 @@ export class PancakeSwap implements Uniswapish {
     } else if (this._chain === 'ethereum' && this.chainId === 42161) {
       v3SubgraphClient = new GraphQLClient(v3Arburl);
       v2SubgraphClient = new GraphQLClient(v2Arburl);
+    } else if (this._chain === 'ethereum' && this.chainId === 8543) {
+      v3SubgraphClient = new GraphQLClient(v3Base);
+      v2SubgraphClient = new GraphQLClient(v2Base);
     } else if (this._chain === 'binance-smart-chain') {
       v3SubgraphClient = new GraphQLClient(v3Bscurl);
       v2SubgraphClient = new GraphQLClient(v2Bscurl);
@@ -471,6 +478,35 @@ export class PancakeSwap implements Uniswapish {
 
   private createPublicClient(): PublicClient {
     const transportUrl: string = this.chain.rpcUrl;
+    const base = {
+      id: 8453, // Chain ID for Base mainnet
+      network: 'base',
+      name: 'Base',
+      nativeCurrency: {
+        name: 'Base',
+        symbol: 'ETH',
+        decimals: 18,
+      },
+      rpcUrls: {
+        default: {
+          http: ['https://mainnet.base.org'],
+        },
+        public: {
+          http: ['https://mainnet.base.org'],
+        },
+      },
+      blockExplorers: {
+        etherscan: {
+          name: 'Basescan',
+          url: 'https://basescan.org',
+        },
+        default: {
+          name: 'Basescan',
+          url: 'https://basescan.org',
+        },
+      },
+      testnet: false, // Indicates this is the main network
+    };
 
     return createPublicClient({
       chain:
@@ -482,7 +518,9 @@ export class PancakeSwap implements Uniswapish {
               ? arbitrum
               : this.chainId === 324
                 ? zkSync
-                : bscTestnet,
+                : this.chainId === 8543
+                  ? base
+                  : bscTestnet,
       transport: http(transportUrl),
       batch: {
         multicall: {
