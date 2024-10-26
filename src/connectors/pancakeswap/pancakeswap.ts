@@ -364,9 +364,9 @@ export class PancakeSwap implements Uniswapish {
     const v2Arburl: string =
       'https://api.studio.thegraph.com/query/45376/exchange-v2-arbitrum/version/latest';
     const v3Base: string =
-      'https://api.studio.thegraph.com/query/45376/exchange-v3-arbitrum/version/latest';
+      'https://api.studio.thegraph.com/query/45376/exchange-v3-base/version/latest';
     const v2Base: string =
-      'https://api.studio.thegraph.com/query/45376/exchange-v2-arbitrum/version/latest';
+      'https://api.studio.thegraph.com/query/45376/exchange-v2-base/version/latest';
 
     if (this._chain === 'ethereum' && this.chainId === 324) {
       v3SubgraphClient = new GraphQLClient(v3Zksurl);
